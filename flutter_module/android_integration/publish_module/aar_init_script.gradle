@@ -1,0 +1,76 @@
+// This script is used to initialize the build in a module or plugin project.
+// During this phase, the script applies the Maven plugin and configures the
+// destination of the local repository.
+// The local repository will contain the AAR and POM files.
+
+import org.gradle.api.Project
+import org.gradle.api.publish.maven.MavenPublication
+
+void configureProject(Project project, String mavenUrl, String mavenUser, String mavenPwd, String version) {
+    if (!project.hasProperty("android")) {
+        throw new GradleException("Android property not found.")
+    }
+    if (!project.android.hasProperty("libraryVariants")) {
+        throw new GradleException("Can't generate AAR on a non Android library project.");
+    }
+
+    project.version = version
+
+    project.components.forEach { component ->
+        if (component.name != "all") {
+            addAarTask(project, component)
+        }
+    }
+
+    project.publishing {
+        repositories {
+            maven {
+                url mavenUrl
+                credentials {
+                    username = mavenUser
+                    password = mavenPwd
+                }
+            }
+        }
+    }
+}
+
+void addAarTask(Project project, component) {
+    String variantName = component.name.capitalize()
+    String taskName = "assembleAar$variantName"
+    project.tasks.create(name: taskName) {
+        // This check is required to be able to configure the archives before `publish` runs.
+        if (!project.gradle.startParameter.taskNames.contains(taskName)) {
+            return
+        }
+
+        // Create a default MavenPublication for the variant (except "all" since that is used to publish artifacts in the new way)
+        project.publishing.publications.create(component.name, MavenPublication) { pub ->
+            groupId = "${pub.groupId}"
+            artifactId = "${pub.artifactId}_${pub.name}"
+            version = "${pub.version}"
+            from component
+        }
+
+        // Generate the Maven artifacts.
+        finalizedBy "publish"
+    }
+}
+
+// maven-publish has to be applied _before_ the project gets evaluated, but some of the code in
+// `configureProject` requires the project to be evaluated. Apply the maven plugin to all projects, but
+// only configure it if it matches the conditions in `projectsEvaluated`
+
+allprojects {
+    apply plugin: "maven-publish"
+}
+
+projectsEvaluated {
+    // The module project is the `:flutter` subproject.
+    Project moduleProject = rootProject.subprojects.find { it.name == "flutter" }
+    assert moduleProject != null
+    assert moduleProject.hasProperty("maven-url")
+    configureProject(moduleProject, moduleProject.property("maven-url"),
+            moduleProject.property("maven-user"), moduleProject.property("maven-pwd"),
+            moduleProject.property("buildNumber"))
+}
