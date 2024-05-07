@@ -20,6 +20,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
+      # Set up JDK
+      - name: Set up JDK
+        uses: actions/setup-java@v3
+        with:
+          distribution: "temurin"
+          java-version: 17
+
       # Setup Flutter
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -36,6 +43,10 @@ jobs:
       - name: Validate Tag
         run: .github/scripts/publish/validate_tag.sh
 
-      # Publish Android Artifact
-      - name: Publish Android Artifact
+      # Publish Android Module
+      - name: Publish Android Module
         run: .github/scripts/publish/publish_android_module.sh
+
+      # Publish Pigeon Jar
+      - name: Publish Pigeon Jar
+        run: .github/scripts/publish/publish_pigeon_jar.sh
